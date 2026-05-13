@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DMARC Decoder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f0f;
+      --bg-panel:  #131616;
+      --bg-card:   #181c1c;
+      --border:    #252b2b;
+      --border-hi: #2e3636;
+      --green:     #00e5a0;
+      --green-dim: #00b87e;
+      --green-bg:  rgba(0,229,160,0.06);
+      --red:       #ff4e4e;
+      --red-bg:    rgba(255,78,78,0.07);
+      --amber:     #ffb547;
+      --amber-bg:  rgba(255,181,71,0.07);
+      --text:      #d4dada;
+      --text-dim:  #6b7878;
+      --text-hi:   #eef2f2;
+      --mono:      'IBM Plex Mono', monospace;
+      --sans:      'IBM Plex Sans', sans-serif;
+      --radius:    4px;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* ---- Layout ---- */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 100;
+    }
+
+    .logo {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--green);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .logo span {
+      color: var(--text-dim);
+      font-weight: 400;
+    }
+
+    .header-status {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    nav {
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      gap: 0;
+    }
+
+    nav button {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+      margin-bottom: -1px;
+    }
+
+    nav button:hover { color: var(--text); }
+    nav button.active {
+      color: var(--green);
+      border-bottom-color: var(--green);
+    }
+
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ---- Upload view ---- */
+    .upload-zone {
+      border: 1px dashed var(--border-hi);
+      border-radius: var(--radius);
+      padding: 4rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+
+    .upload-zone:hover,
+    .upload-zone.drag-over {
+      border-color: var(--green-dim);
+      background: var(--green-bg);
+    }
+
+    .upload-zone input[type=file] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .upload-icon {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 1.25rem;
+      border: 1px solid var(--border-hi);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--green);
+    }
+
+    .upload-icon svg { width: 20px; height: 20px; }
+
+    .upload-title {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-hi);
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.04em;
+    }
+
+    .upload-sub {
+      font-size: 12px;
+      color: var(--text-dim);
+      font-family: var(--mono);
+    }
+
+    .upload-formats {
+      margin-top: 1.5rem;
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      padding: 3px 8px;
+      border-radius: 2px;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    /* ---- Progress / status ---- */
+    .status-bar {
+      margin-top: 1.5rem;
+      display: none;
+    }
+
+    .status-bar.visible { display: block; }
+
+    .status-line {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-line .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 1s infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    .progress-track {
+      height: 2px;
+      background: var(--border);
+      border-radius: 1px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--green);
+      border-radius: 1px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    /* ---- Alert ---- */
+    .alert {
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-family: var(--mono);
+      font-size: 12px;
+      margin-top: 1rem;
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+      line-height: 1.6;
+    }
+
+    .alert.visible { display: flex; }
+    .alert.success { background: var(--green-bg); border: 1px solid var(--green-dim); color: var(--green); }
+    .alert.error   { background: var(--red-bg);   border: 1px solid var(--red);      color: var(--red); }
+    .alert.warning { background: var(--amber-bg);  border: 1px solid var(--amber);    color: var(--amber); }
+
+    /* ---- Dashboard ---- */
+    .section-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Summary cards */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: var(--bg-card);
+      padding: 1.25rem 1.5rem;
+    }
+
+    .card-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.6rem;
+    }
+
+    .card-value {
+      font-family: var(--mono);
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--text-hi);
+      line-height: 1;
+    }
+
+    .card-value.green { color: var(--green); }
+    .card-value.red   { color: var(--red); }
+    .card-value.amber { color: var(--amber); }
+
+    .card-sub {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 0.4rem;
+    }
+
+    /* Chart area */
+    .chart-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      position: relative;
+    }
+
+    .chart-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .chart-days {
+      display: flex;
+      gap: 4px;
+    }
+
+    .chart-days button {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 2px 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .chart-days button:hover { border-color: var(--border-hi); color: var(--text); }
+    .chart-days button.active { border-color: var(--green-dim); color: var(--green); }
+
+    canvas { width: 100% !important; }
+
+    /* Table */
+    .table-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 2rem;
+    }
+
+    .table-header {
+      padding: 12px 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .table-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 10px 1.5rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    td {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      padding: 10px 1.5rem;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .pill {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      padding: 2px 8px;
+      border-radius: 2px;
+      text-transform: uppercase;
+    }
+
+    .pill-pass    { background: var(--green-bg); color: var(--green);   border: 1px solid var(--green-dim); }
+    .pill-fail    { background: var(--red-bg);   color: var(--red);     border: 1px solid var(--red); }
+    .pill-neutral { background: var(--amber-bg); color: var(--amber);   border: 1px solid var(--amber); }
+    .pill-none    { background: transparent;     color: var(--text-dim);border: 1px solid var(--border); }
+
+    /* Loading skeleton */
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg-card) 25%, var(--border) 50%, var(--bg-card) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 2px;
+      height: 14px;
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Warming up overlay */
+    .warming {
+      text-align: center;
+      padding: 3rem;
+      font-family: var(--mono);
+    }
+
+    .warming-title {
+      font-size: 13px;
+      color: var(--amber);
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+
+    .warming-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 1.5rem;
+    }
+
+    .warming-retry {
+      background: none;
+      border: 1px solid var(--border-hi);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 8px 20px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .warming-retry:hover {
+      border-color: var(--green-dim);
+      color: var(--green);
+    }
+
+    /* Two column grid for charts */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      main { padding: 1rem; }
+      header { padding: 0 1rem; }
+      nav { padding: 0 1rem; }
+    }
+
+    /* Empty state */
+    .empty {
+      text-align: center;
+      padding: 3rem;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    /* Clickable report rows */
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover td { background: rgba(0,229,160,0.04); }
+
+    /* Policy readiness banner */
+    .readiness-banner {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .readiness-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .readiness-body { flex: 1; }
+    .readiness-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 2px;
+    }
+    .readiness-message {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+    }
+    .readiness-rates {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+    .readiness-banner.tighten  { border-color: var(--green-dim);  }
+    .readiness-banner.monitor  { border-color: var(--amber);      }
+    .readiness-banner.investigate { border-color: var(--red);     }
+
+    /* Modal overlay */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 100;
+      overflow-y: auto;
+      padding: 2rem 1rem;
+    }
+    .modal-overlay.open { display: flex; align-items: flex-start; justify-content: center; }
+    .modal {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-hi);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 960px;
+      padding: 1.5rem;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1.25rem;
+    }
+    .modal-title {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text-hi);
+      font-weight: 500;
+    }
+    .modal-meta {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+    .modal-close {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 13px;
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .modal-close:hover { border-color: var(--red); color: var(--red); }
+    .modal-table-wrap { overflow-x: auto; }
+
+    /* Sender classification pills */
+    .pill-known       { background: var(--green-bg); color: var(--green);   border: 1px solid var(--green-dim); }
+    .pill-forwarded   { background: var(--amber-bg); color: var(--amber);   border: 1px solid var(--amber); }
+    .pill-suspicious  { background: var(--red-bg);   color: var(--red);     border: 1px solid var(--red); }
+    .pill-misconfig   { background: transparent;     color: var(--text-dim);border: 1px solid var(--border); }
+    .pill-override    { background: #1a1a2e;         color: #a78bfa;        border: 1px solid #a78bfa44; font-size: 0.7rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">DMARC<span>//</span>Decoder</div>
+  <div class="header-status" id="header-status"></div>
+</header>
+
+<nav>
+  <button class="active" onclick="showView('upload', this)">Upload</button>
+  <button onclick="showView('dashboard', this)">Dashboard</button>
+  <button onclick="showView('reports', this)">Reports</button>
+  <button onclick="showView('failures', this)">Failures</button>
+</nav>
+
+<main>
+
+  <!-- ======== UPLOAD VIEW ======== -->
+  <div class="view active" id="view-upload">
+    <div style="max-width: 600px; margin: 3rem auto;">
+      <div class="section-label">Ingest Report</div>
+
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" id="file-input" accept=".xml,.gz,.gzip,.zip">
+        <div class="upload-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12M8 8l4-4 4 4"/>
+          </svg>
+        </div>
+        <div class="upload-title">Drop DMARC report here</div>
+        <div class="upload-sub">or click to browse</div>
+        <div class="upload-formats">
+          <span class="tag">.xml</span>
+          <span class="tag">.gz</span>
+          <span class="tag">.gzip</span>
+          <span class="tag">.zip</span>
+        </div>
+      </div>
+
+      <div class="status-bar" id="status-bar">
+        <div class="status-line">
+          <div class="dot"></div>
+          <span id="status-text">Requesting upload URL...</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+      </div>
+
+      <div class="alert" id="upload-alert"></div>
+    </div>
+  </div>
+
+  <!-- ======== DASHBOARD VIEW ======== -->
+  <div class="view" id="view-dashboard">
+
+    <div id="policy-readiness-banner"></div>
+
+    <div class="section-label">Summary</div>
+    <div class="cards" id="summary-cards">
+      <div class="card"><div class="card-label">Total Reports</div><div class="skeleton" style="width:60px;height:28px;margin-top:4px;"></div></div>
+      <div class="card"><div class="card-label">Total Messages</div><div class="skeleton" style="width:80px;height:28px;margin-top:4px;"></div></div>
+      <div class="card"><div class="card-label">Passed</div><div class="skeleton" style="width:60px;height:28px;margin-top:4px;"></div></div>
+      <div class="card"><div class="card-label">Failed</div><div class="skeleton" style="width:60px;height:28px;margin-top:4px;"></div></div>
+      <div class="card"><div class="card-label">Unique IPs</div><div class="skeleton" style="width:50px;height:28px;margin-top:4px;"></div></div>
+      <div class="card"><div class="card-label">Domains</div><div class="skeleton" style="width:40px;height:28px;margin-top:4px;"></div></div>
+    </div>
+
+    <div class="chart-container">
+      <div class="chart-title">
+        <span>Message Volume — Pass vs Fail</span>
+        <div class="chart-days">
+          <button onclick="setTrendDays(7, this)">7d</button>
+          <button class="active" onclick="setTrendDays(30, this)">30d</button>
+          <button onclick="setTrendDays(90, this)">90d</button>
+        </div>
+      </div>
+      <canvas id="trend-chart" height="200"></canvas>
+      <div id="trend-warming" class="warming" style="display:none;">
+        <div class="warming-title">⚠ Database warming up</div>
+        <div class="warming-sub">Aurora is scaling from zero — this takes 20–40 seconds.</div>
+        <button class="warming-retry" onclick="loadDashboard()">Retry</button>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="chart-container">
+        <div class="chart-title">Disposition Breakdown</div>
+        <canvas id="disposition-chart" height="200"></canvas>
+      </div>
+      <div class="table-container">
+        <div class="table-header"><span class="table-title">Top Source IPs</span></div>
+        <table>
+          <thead>
+            <tr>
+              <th>IP Address</th>
+              <th>Messages</th>
+              <th>DKIM</th>
+              <th>SPF</th>
+            </tr>
+          </thead>
+          <tbody id="top-ips-body">
+            <tr><td colspan="4"><div class="empty">Loading...</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ======== REPORTS VIEW ======== -->
+  <div class="view" id="view-reports">
+    <div class="section-label">All Reports</div>
+    <div class="table-container">
+      <div class="table-header"><span class="table-title">Received Reports</span></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Date Range</th>
+            <th>Domain</th>
+            <th>Org</th>
+            <th>Policy</th>
+            <th>Messages</th>
+            <th>DKIM Pass</th>
+            <th>SPF Pass</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody id="reports-body">
+          <tr><td colspan="7"><div class="empty">Loading...</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ======== FAILURES VIEW ======== -->
+  <div class="view" id="view-failures">
+    <div class="section-label">DKIM / SPF Failures</div>
+    <div class="table-container">
+      <div class="table-header"><span class="table-title">Records where DKIM or SPF failed</span></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Domain</th>
+            <th>Source IP</th>
+            <th>Messages</th>
+            <th>Disposition</th>
+            <th>DKIM</th>
+            <th>SPF</th>
+            <th>Header From</th>
+            <th>Reporter Override</th>
+          </tr>
+        </thead>
+        <tbody id="failures-body">
+          <tr><td colspan="9"><div class="empty">Loading...</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ======== REPORT DETAIL MODAL ======== -->
+  <div class="modal-overlay" id="report-modal" onclick="closeModal(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="modal-title">Report Detail</div>
+          <div class="modal-meta" id="modal-meta"></div>
+        </div>
+        <button class="modal-close" onclick="closeReportModal()">✕</button>
+      </div>
+      <div class="modal-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Source IP</th>
+              <th>Messages</th>
+              <th>Disposition</th>
+              <th>DKIM</th>
+              <th>SPF</th>
+              <th>DKIM Domain</th>
+              <th>SPF Domain</th>
+              <th>Classification</th>
+              <th>Reporter Override</th>
+            </tr>
+          </thead>
+          <tbody id="modal-records-body">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- Config — generated by deploy.sh -->
+<script src="config.js"></script>
+
+<script>
+// -------------------------------------------------------
+// Config fallback for local development
+// -------------------------------------------------------
+if (typeof CONFIG === 'undefined') {
+  console.warn('config.js not found — using placeholder API URL');
+  window.CONFIG = { apiBaseUrl: 'https://YOUR_API_GATEWAY_URL' };
+}
+
+const API = CONFIG.apiBaseUrl;
+
+// -------------------------------------------------------
+// Chart.js defaults — terminal aesthetic
+// -------------------------------------------------------
+Chart.defaults.color          = '#6b7878';
+Chart.defaults.borderColor    = '#252b2b';
+Chart.defaults.font.family    = "'IBM Plex Mono', monospace";
+Chart.defaults.font.size      = 11;
+
+let trendChart       = null;
+let dispositionChart = null;
+let currentTrendDays = 30;
+
+// -------------------------------------------------------
+// Navigation
+// -------------------------------------------------------
+function showView(name, btn) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  btn.classList.add('active');
+
+  if (name === 'dashboard') loadDashboard();
+  if (name === 'reports')   loadReports();
+  if (name === 'failures')  loadFailures();
+}
+
+// -------------------------------------------------------
+// API helper
+// -------------------------------------------------------
+async function api(path) {
+  const res = await fetch(API + path);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+// -------------------------------------------------------
+// Upload flow
+// -------------------------------------------------------
+const zone      = document.getElementById('upload-zone');
+const fileInput = document.getElementById('file-input');
+const statusBar = document.getElementById('status-bar');
+const statusTxt = document.getElementById('status-text');
+const progFill  = document.getElementById('progress-fill');
+const alertBox  = document.getElementById('upload-alert');
+
+zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+  e.preventDefault();
+  zone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) handleFile(fileInput.files[0]);
+});
+
+function setStatus(msg, pct) {
+  statusBar.classList.add('visible');
+  statusTxt.textContent = msg;
+  progFill.style.width  = pct + '%';
+}
+
+function showAlert(type, msg) {
+  alertBox.className    = 'alert visible ' + type;
+  alertBox.textContent  = msg;
+}
+
+function clearAlert() {
+  alertBox.className = 'alert';
+  alertBox.textContent = '';
+}
+
+async function handleFile(file) {
+  const ALLOWED = ['application/xml', 'application/zip', 'application/gzip',
+                   'application/x-gzip', 'application/octet-stream', 'text/xml'];
+  const ext = file.name.split('.').pop().toLowerCase();
+  const allowed_exts = ['xml', 'gz', 'gzip', 'zip'];
+
+  if (!allowed_exts.includes(ext)) {
+    showAlert('error', `Unsupported file type: .${ext} — accepted formats: .xml .gz .gzip .zip`);
+    return;
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    showAlert('error', 'File too large — maximum 10MB');
+    return;
+  }
+
+  clearAlert();
+  fileInput.value = '';
+
+  try {
+    // Step 1 — get presigned URL
+    setStatus('Requesting upload URL...', 10);
+    const contentType = ALLOWED.includes(file.type) ? file.type : 'application/octet-stream';
+    const urlRes = await api(`/upload-url?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(contentType)}`);
+
+    // Step 2 — PUT directly to S3
+    setStatus('Uploading to S3...', 30);
+    const put = await fetch(urlRes.uploadUrl, {
+      method:  'PUT',
+      headers: { 'Content-Type': contentType },
+      body:    file,
+    });
+
+    if (!put.ok) throw new Error(`S3 upload failed: HTTP ${put.status}`);
+
+    setStatus('Upload complete — parsing in progress...', 90);
+
+    // Parsing is async (S3 event → Lambda) — give it a moment
+    await sleep(2000);
+    setStatus('Done.', 100);
+
+    showAlert('success', `✓ ${file.name} uploaded successfully. Parser is processing in the background — check the Dashboard in a few seconds.`);
+    statusBar.classList.remove('visible');
+    progFill.style.width = '0%';
+
+  } catch (err) {
+    setStatus('', 0);
+    statusBar.classList.remove('visible');
+
+    if (err.message.includes('403') || err.message.includes('Failed to fetch')) {
+      showAlert('error', '✗ Access denied — check that your IP is in the allowed list.');
+    } else {
+      showAlert('error', '✗ Upload failed: ' + err.message);
+    }
+  }
+}
+
+// -------------------------------------------------------
+// Dashboard
+// -------------------------------------------------------
+async function loadDashboard() {
+  document.getElementById('trend-warming').style.display = 'none';
+  loadSummary();
+  loadTrend(currentTrendDays);
+  loadDisposition();
+  loadTopIPs();
+  loadPolicyReadiness();
+}
+
+async function loadPolicyReadiness() {
+  const el = document.getElementById('policy-readiness-banner');
+  try {
+    const d = await api('/query/policy-readiness');
+    const icons = { tighten: '✓', monitor: '◎', investigate: '⚠', no_data: '—' };
+    const rates = [
+      d.pass_rate_7d  != null ? `7d: ${d.pass_rate_7d}%`  : null,
+      d.pass_rate_30d != null ? `30d: ${d.pass_rate_30d}%` : null,
+    ].filter(Boolean).join('  ·  ');
+
+    el.innerHTML = `
+      <div class="readiness-banner ${d.recommendation}">
+        <div class="readiness-icon">${icons[d.recommendation] || '—'}</div>
+        <div class="readiness-body">
+          <div class="readiness-label">Policy Readiness · current: p=${d.current_policy || '—'}</div>
+          <div class="readiness-message">${d.message}</div>
+          ${rates ? `<div class="readiness-rates">${rates}</div>` : ''}
+        </div>
+      </div>`;
+  } catch (e) {
+    el.innerHTML = '';
+  }
+}
+
+async function loadSummary() {
+  try {
+    const data = await api('/query/summary');
+    const s    = data.summary || {};
+    const total = s.total_messages || 0;
+    const passed = s.passed || 0;
+    const failed = s.failed || 0;
+    const pct    = total > 0 ? Math.round(passed / total * 100) : 0;
+
+    document.getElementById('summary-cards').innerHTML = `
+      <div class="card">
+        <div class="card-label">Total Reports</div>
+        <div class="card-value">${fmt(s.total_reports)}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Total Messages</div>
+        <div class="card-value">${fmt(total)}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Passed</div>
+        <div class="card-value green">${fmt(passed)}</div>
+        <div class="card-sub">${pct}% pass rate</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Failed</div>
+        <div class="card-value ${failed > 0 ? 'red' : ''}">${fmt(failed)}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Unique IPs</div>
+        <div class="card-value">${fmt(s.unique_ips)}</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Domains</div>
+        <div class="card-value">${fmt(s.domains)}</div>
+      </div>
+    `;
+    document.getElementById('header-status').textContent =
+      total > 0 ? `${fmt(total)} messages · ${pct}% pass` : '';
+  } catch (e) {
+    handleWarmup('summary-cards', e);
+  }
+}
+
+async function loadTrend(days) {
+  try {
+    const data   = await api(`/query/trend?days=${days}`);
+    const rows   = data.trend || [];
+    const labels = rows.map(r => fmtDate(r.day));
+    const passed = rows.map(r => r.passed || 0);
+    const failed = rows.map(r => r.failed || 0);
+
+    if (trendChart) trendChart.destroy();
+
+    trendChart = new Chart(document.getElementById('trend-chart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label:           'Passed',
+            data:            passed,
+            backgroundColor: 'rgba(0,229,160,0.5)',
+            borderColor:     '#00e5a0',
+            borderWidth:     1,
+          },
+          {
+            label:           'Failed',
+            data:            failed,
+            backgroundColor: 'rgba(255,78,78,0.4)',
+            borderColor:     '#ff4e4e',
+            borderWidth:     1,
+          }
+        ]
+      },
+      options: {
+        responsive:          true,
+        maintainAspectRatio: true,
+        interaction:         { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { boxWidth: 10, padding: 16 } },
+        },
+        scales: {
+          x: { stacked: true, grid: { display: false } },
+          y: { stacked: true, beginAtZero: true }
+        }
+      }
+    });
+  } catch (e) {
+    document.getElementById('trend-warming').style.display = 'block';
+  }
+}
+
+async function loadDisposition() {
+  try {
+    const data  = await api('/query/disposition');
+    const rows  = data.disposition || [];
+    const labels = rows.map(r => r.disposition || 'unknown');
+    const values = rows.map(r => r.message_count || 0);
+    const colors = labels.map(l =>
+      l === 'none'        ? 'rgba(0,229,160,0.6)' :
+      l === 'quarantine'  ? 'rgba(255,181,71,0.6)' :
+                            'rgba(255,78,78,0.6)'
+    );
+
+    if (dispositionChart) dispositionChart.destroy();
+
+    dispositionChart = new Chart(document.getElementById('disposition-chart'), {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data:            values,
+          backgroundColor: colors,
+          borderColor:     '#181c1c',
+          borderWidth:     2,
+        }]
+      },
+      options: {
+        responsive:          true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, padding: 16 } }
+        }
+      }
+    });
+  } catch (e) { /* silent — trend shows warmup msg */ }
+}
+
+async function loadTopIPs() {
+  const tbody = document.getElementById('top-ips-body');
+  try {
+    const data = await api('/query/top-ips?limit=10');
+    const rows = data.top_ips || [];
+
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="4"><div class="empty">No data yet</div></td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${r.source_ip}</td>
+        <td>${fmt(r.total_messages)}</td>
+        <td>${pill(r.dkim_pass >= r.total_messages ? 'pass' : 'fail', r.dkim_pass >= r.total_messages ? 'pass' : 'fail')}</td>
+        <td>${pill(r.spf_pass >= r.total_messages ? 'pass' : 'fail', r.spf_pass >= r.total_messages ? 'pass' : 'fail')}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty">Error loading data</div></td></tr>`;
+  }
+}
+
+function setTrendDays(days, btn) {
+  document.querySelectorAll('.chart-days button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentTrendDays = days;
+  loadTrend(days);
+}
+
+// -------------------------------------------------------
+// Reports view
+// -------------------------------------------------------
+async function loadReports() {
+  const tbody = document.getElementById('reports-body');
+  try {
+    const data = await api('/query/reports?limit=100');
+    const rows = data.reports || [];
+
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty">No reports yet — upload one to get started</div></td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows.map(r => {
+      const total   = r.total_messages || 0;
+      const dkimPct = total > 0 ? Math.round((r.dkim_pass || 0) / total * 100) : null;
+      const spfPct  = total > 0 ? Math.round((r.spf_pass  || 0) / total * 100) : null;
+
+      const dkimCls = dkimPct === 100 ? 'green' : dkimPct >= 90 ? '' : 'red';
+      const spfCls  = spfPct  === 100 ? 'green' : spfPct  >= 90 ? '' : 'red';
+
+      return `
+        <tr class="clickable" onclick="openReportModal('${escHtml(r.report_id)}', '${escHtml(r.org_name || '')}', '${escHtml(r.domain || '')}', '${fmtDate(r.report_begin)}', '${fmtDate(r.report_end)}')">
+          <td>${fmtDate(r.report_begin)} → ${fmtDate(r.report_end)}</td>
+          <td>${r.domain || '—'}</td>
+          <td>${r.org_name || '—'}</td>
+          <td>${policyPill(r.policy_p)}</td>
+          <td>${fmt(total)}</td>
+          <td class="${dkimCls}">${dkimPct != null ? dkimPct + '%' : '—'}</td>
+          <td class="${spfCls}">${spfPct  != null ? spfPct  + '%' : '—'}</td>
+          <td><span class="tag">${r.ingestion_path || '—'}</span></td>
+        </tr>`;
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = warmupRow(8, () => loadReports());
+  }
+}
+
+// -------------------------------------------------------
+// Report detail modal
+// -------------------------------------------------------
+const KNOWN_SENDER_DOMAINS = [
+  'google.com', 'googlemail.com', 'gmail.com',
+  'outlook.com', 'microsoft.com', 'hotmail.com', 'live.com', 'protection.outlook.com',
+  'yahoo.com', 'yahoodns.net',
+  'amazonses.com', 'amazon.com', 'amazonaws.com',
+  'sendgrid.net', 'mailchimp.com', 'mcsv.net',
+  'mailgun.org', 'postmarkapp.com', 'sparkpostmail.com',
+  'zendesk.com', 'salesforce.com', 'exacttarget.com',
+  'constantcontact.com', 'hubspot.com', 'marketo.net',
+];
+
+function isKnownDomain(str) {
+  if (!str) return false;
+  const s = str.toLowerCase();
+  return KNOWN_SENDER_DOMAINS.some(k => s === k || s.endsWith('.' + k));
+}
+
+const OVERRIDE_LABELS = {
+  forwarded:        { label: 'Forwarded',     cls: 'pill-forwarded'  },
+  mailing_list:     { label: 'Mailing List',  cls: 'pill-forwarded'  },
+  trusted_forwarder:{ label: 'Fwd (Trusted)', cls: 'pill-forwarded'  },
+  local_policy:     { label: 'Local Policy',  cls: 'pill-known'      },
+  sampled_out:      { label: 'Sampled Out',   cls: 'pill-known'      },
+  other:            { label: 'Override',      cls: 'pill-known'      },
+};
+
+function classifySender(rec) {
+  const dkim = rec.dkim_result === 'pass';
+  const spf  = rec.spf_result  === 'pass';
+
+  // Prefer the reason the reporter actually declared
+  const reasons = (rec.override_reason || '').split(',').map(s => s.trim()).filter(Boolean);
+  for (const r of reasons) {
+    if (OVERRIDE_LABELS[r]) return OVERRIDE_LABELS[r];
+  }
+
+  const domains = [rec.dkim_domain, rec.spf_domain, rec.envelope_from].filter(Boolean);
+  const known   = domains.some(isKnownDomain);
+
+  if (!dkim && !spf) {
+    return known
+      ? { label: 'Config Issue', cls: 'pill-misconfig' }
+      : { label: 'Suspicious',   cls: 'pill-suspicious' };
+  }
+  if (dkim && !spf) return { label: 'Forwarded', cls: 'pill-forwarded' };
+  if (known)        return { label: 'Known',     cls: 'pill-known' };
+  return              { label: 'Pass',        cls: 'pill-pass' };
+}
+
+async function openReportModal(reportId, org, domain, begin, end) {
+  document.getElementById('modal-title').textContent = `${org || domain} — ${begin} → ${end}`;
+  document.getElementById('modal-meta').textContent  = `report_id: ${reportId}`;
+  document.getElementById('modal-records-body').innerHTML =
+    `<tr><td colspan="9"><div class="empty">Loading...</div></td></tr>`;
+  document.getElementById('report-modal').classList.add('open');
+
+  try {
+    const data    = await api(`/query/report-detail?report_id=${encodeURIComponent(reportId)}`);
+    const records = data.records || [];
+
+    if (!records.length) {
+      document.getElementById('modal-records-body').innerHTML =
+        `<tr><td colspan="9"><div class="empty">No records found.</div></td></tr>`;
+      return;
+    }
+
+    document.getElementById('modal-records-body').innerHTML = records.map(rec => {
+      const cls = classifySender(rec);
+      return `
+        <tr>
+          <td>${rec.source_ip || '—'}</td>
+          <td>${fmt(rec.message_count)}</td>
+          <td>${dispositionPill(rec.disposition)}</td>
+          <td>${pill(rec.dkim_result, rec.dkim_result)}</td>
+          <td>${pill(rec.spf_result,  rec.spf_result)}</td>
+          <td>${rec.dkim_domain || '—'}</td>
+          <td>${rec.spf_domain  || '—'}</td>
+          <td><span class="pill ${cls.cls}">${cls.label}</span></td>
+          <td>${rec.override_reason ? `<span class="pill pill-override">${escHtml(rec.override_reason)}</span>` : '—'}</td>
+        </tr>`;
+    }).join('');
+  } catch (e) {
+    document.getElementById('modal-records-body').innerHTML =
+      `<tr><td colspan="9"><div class="empty">Failed to load records.</div></td></tr>`;
+  }
+}
+
+function closeReportModal() {
+  document.getElementById('report-modal').classList.remove('open');
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('report-modal')) closeReportModal();
+}
+
+function escHtml(s) {
+  return String(s).replace(/'/g, "\\'");
+}
+
+// -------------------------------------------------------
+// Failures view
+// -------------------------------------------------------
+async function loadFailures() {
+  const tbody = document.getElementById('failures-body');
+  try {
+    const data = await api('/query/failure-detail?limit=100');
+    const rows = data.failures || [];
+
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty">No failures found — looking good.</div></td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${fmtDate(r.report_begin)}</td>
+        <td>${r.domain || '—'}</td>
+        <td>${r.source_ip || '—'}</td>
+        <td>${fmt(r.message_count)}</td>
+        <td>${dispositionPill(r.disposition)}</td>
+        <td>${pill(r.dkim_result, r.dkim_result)}</td>
+        <td>${pill(r.spf_result, r.spf_result)}</td>
+        <td>${r.header_from || '—'}</td>
+        <td>${r.override_reason ? `<span class="pill pill-override">${escHtml(r.override_reason)}</span>` : '—'}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    tbody.innerHTML = warmupRow(9, () => loadFailures());
+  }
+}
+
+// -------------------------------------------------------
+// Helpers
+// -------------------------------------------------------
+function fmt(n) {
+  if (n === null || n === undefined) return '—';
+  return Number(n).toLocaleString();
+}
+
+function fmtDate(s) {
+  if (!s) return '—';
+  const d = new Date(s);
+  if (isNaN(d)) return s;
+  return d.toISOString().slice(0, 10);
+}
+
+function pill(val, type) {
+  const cls = type === 'pass' ? 'pill-pass' :
+              type === 'fail' ? 'pill-fail' :
+              type === 'none' ? 'pill-none' : 'pill-neutral';
+  return `<span class="pill ${cls}">${val || '—'}</span>`;
+}
+
+function policyPill(p) {
+  const cls = p === 'reject'     ? 'pill-pass' :
+              p === 'quarantine' ? 'pill-neutral' : 'pill-none';
+  return `<span class="pill ${cls}">${p || '—'}</span>`;
+}
+
+function dispositionPill(d) {
+  const cls = d === 'none'        ? 'pill-pass' :
+              d === 'quarantine'  ? 'pill-neutral' : 'pill-fail';
+  return `<span class="pill ${cls}">${d || '—'}</span>`;
+}
+
+function handleWarmup(elId, err) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (err && err.message && err.message.includes('500')) {
+    el.innerHTML = `
+      <div class="warming">
+        <div class="warming-title">⚠ Database warming up</div>
+        <div class="warming-sub">Aurora is scaling from zero — 20–40 seconds.</div>
+        <button class="warming-retry" onclick="loadDashboard()">Retry</button>
+      </div>`;
+  }
+}
+
+function warmupRow(cols, retryFn) {
+  window._warmupRetry = retryFn;
+  return `<tr><td colspan="${cols}">
+    <div class="warming">
+      <div class="warming-title">⚠ Database warming up</div>
+      <div class="warming-sub">Aurora is scaling from zero — 20–40 seconds.</div>
+      <button class="warming-retry" onclick="window._warmupRetry()">Retry</button>
+    </div>
+  </td></tr>`;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>

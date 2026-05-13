@@ -1,0 +1,18 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit it.
+
+aws_region     = "us-east-1"
+project_name   = "dmarc-decoder"
+s3_bucket_name = "dmarc-decoder"
+db_name        = "dmarcdb"
+db_username    = "dmarcadmin"
+
+# Your public IP(s) — get current IP from: curl https://checkip.amazonaws.com
+# Must include the /32 suffix (meaning "this exact IP"). Example: "184.155.81.199/32"
+# Multiple IPs are comma-separated inside the brackets:
+#   allowed_ips = ["184.155.81.199/32", "203.0.113.42/32"]
+allowed_ips = ["YOUR_IP_ADDRESS/32"]
+
+# Set to true only during active development / testing.
+# When false, terraform destroy will refuse to delete the bucket if it contains data.
+s3_force_destroy = false

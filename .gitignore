@@ -1,0 +1,53 @@
+# Terraform
+infrastructure/terraform.tfvars
+infrastructure/.terraform/
+infrastructure/terraform.tfstate
+infrastructure/terraform.tfstate.backup
+infrastructure/terraform.tfstate.*.backup
+infrastructure/builds/
+*.tfplan
+*.tfstate
+
+# Frontend generated config
+frontend/config.js
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Editor / IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# AWS / secrets
+*.pem
+*.key
+credentials
+.env
+.env.*
+
+# Logs
+*.log
+logs/
+
+# Claude
+CLAUDE.md

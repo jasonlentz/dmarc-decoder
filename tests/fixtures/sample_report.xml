@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Sample DMARC Aggregate Report
+  Use this file to test the parser Lambda manually.
+  Based on the RFC 7489 DMARC aggregate report schema.
+-->
+<feedback>
+  <report_metadata>
+    <org_name>Google LLC</org_name>
+    <email>noreply-dmarc-support@google.com</email>
+    <extra_contact_info>https://support.google.com/a/answer/2466580</extra_contact_info>
+    <report_id>12345678901234567890</report_id>
+    <date_range>
+      <begin>1746748800</begin>
+      <end>1746835199</end>
+    </date_range>
+  </report_metadata>
+
+  <policy_published>
+    <domain>example.com</domain>
+    <adkim>r</adkim>
+    <aspf>r</aspf>
+    <p>quarantine</p>
+    <sp>none</sp>
+    <pct>100</pct>
+  </policy_published>
+
+  <!-- Record 1: Legitimate mail server, both pass -->
+  <record>
+    <row>
+      <source_ip>203.0.113.10</source_ip>
+      <count>142</count>
+      <policy_evaluated>
+        <disposition>none</disposition>
+        <dkim>pass</dkim>
+        <spf>pass</spf>
+      </policy_evaluated>
+    </row>
+    <identifiers>
+      <header_from>example.com</header_from>
+      <envelope_from>example.com</envelope_from>
+    </identifiers>
+    <auth_results>
+      <dkim>
+        <domain>example.com</domain>
+        <selector>default</selector>
+        <result>pass</result>
+      </dkim>
+      <spf>
+        <domain>example.com</domain>
+        <result>pass</result>
+      </spf>
+    </auth_results>
+  </record>
+
+  <!-- Record 2: Third-party sender (e.g. marketing platform), SPF fail -->
+  <record>
+    <row>
+      <source_ip>198.51.100.55</source_ip>
+      <count>27</count>
+      <policy_evaluated>
+        <disposition>none</disposition>
+        <dkim>pass</dkim>
+        <spf>fail</spf>
+      </policy_evaluated>
+    </row>
+    <identifiers>
+      <header_from>example.com</header_from>
+      <envelope_from>mail.sendgrid.net</envelope_from>
+    </identifiers>
+    <auth_results>
+      <dkim>
+        <domain>example.com</domain>
+        <selector>s1</selector>
+        <result>pass</result>
+      </dkim>
+      <spf>
+        <domain>mail.sendgrid.net</domain>
+        <result>fail</result>
+      </spf>
+    </auth_results>
+  </record>
+
+  <!-- Record 3: Unknown source, both fail — quarantined -->
+  <record>
+    <row>
+      <source_ip>192.0.2.99</source_ip>
+      <count>3</count>
+      <policy_evaluated>
+        <disposition>quarantine</disposition>
+        <dkim>fail</dkim>
+        <spf>fail</spf>
+      </policy_evaluated>
+    </row>
+    <identifiers>
+      <header_from>example.com</header_from>
+      <envelope_from>evil-sender.example</envelope_from>
+    </identifiers>
+    <auth_results>
+      <dkim>
+        <domain>example.com</domain>
+        <selector>default</selector>
+        <result>fail</result>
+      </dkim>
+      <spf>
+        <domain>evil-sender.example</domain>
+        <result>fail</result>
+      </spf>
+    </auth_results>
+  </record>
+
+</feedback>
