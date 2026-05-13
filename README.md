@@ -6,6 +6,16 @@ DMARC aggregate reports arrive as XML (often compressed inside ZIP or GZIP) and 
 
 ---
 
+## Screenshots
+
+<a href="docs/screenshots/dmarc-decoder-dashboard.png"><img src="docs/screenshots/dmarc-decoder-dashboard.png" width="400" alt="Dashboard"></a>
+<a href="docs/screenshots/dmarc-decoder-reports.png"><img src="docs/screenshots/dmarc-decoder-reports.png" width="400" alt="Reports"></a>
+<a href="docs/screenshots/dmarc-decoder-report-detail.png"><img src="docs/screenshots/dmarc-decoder-report-detail.png" width="400" alt="Report Detail"></a>
+<a href="docs/screenshots/dmarc-decoder-failures.png"><img src="docs/screenshots/dmarc-decoder-failures.png" width="400" alt="Failures"></a>
+<a href="docs/screenshots/dmarc-decoder-landing-page.png"><img src="docs/screenshots/dmarc-decoder-landing-page.png" width="400" alt="Upload"></a>
+
+---
+
 ## Intention
 
 I created this tool to help monitor changes to mail delivery while working through various DMARC, DKIM and SPF configurations.  Use it for a week or two and destroy it, or keep it around as long as it's useful.
